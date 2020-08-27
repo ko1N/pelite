@@ -547,14 +547,13 @@ impl<'a, 'pat, P: Pe<'a>> Matches<'pat, P> {
 		let mut qsbuf = [0u8; QS_BUF_LEN];
 		let qsbuf = self.setup(&mut qsbuf);
 
-		let image = self.scanner.pe.image();
 		match self.scanner.pe.align() {
 			Align::File => {
 				for section in self.scanner.pe.section_headers() {
 					// If section overlaps with the scanning range
 					if section.VirtualAddress < self.range.end && u32::wrapping_add(section.VirtualAddress, section.VirtualSize) > self.range.start {
 						// Get the image slice for this section for further processing, skipping corrupt section headers
-						if let Some(slice) = image.get(section.PointerToRawData as usize..u32::wrapping_add(section.PointerToRawData, section.SizeOfRawData) as usize) {
+						if let Some(slice) = self.scanner.pe.image_slice(section.PointerToRawData as usize, section.SizeOfRawData as usize) {
 							if self.next_section(qsbuf, section.VirtualAddress, slice, save) {
 								return true;
 							}
@@ -564,7 +563,11 @@ impl<'a, 'pat, P: Pe<'a>> Matches<'pat, P> {
 				false
 			},
 			Align::Section => {
-				self.next_section(qsbuf, 0, image, save)
+				if let Some(slice) = self.scanner.pe.image_slice(self.range.start as usize, (self.range.end - self.range.start) as usize) {
+					self.next_section(qsbuf, self.range.start, slice, save)
+				} else {
+					false
+				}
 			},
 		}
 	}
